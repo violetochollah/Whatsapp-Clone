@@ -15,25 +15,25 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-type client struct {
+type Client struct {
 	conn *websocket.Conn
 	send chan []byte
 }
 type Hub struct {
-	clients    map[*client]bool
+	Clients    map[*Client]bool
 	Broadcast  chan []byte
-	Register   chan *client
-	unregister chan *client
+	Register   chan *Client
+	unregister chan *Client
 }
 
 var HubInstance = &Hub{
-	clients:    make(map[*client]bool),
+	Clients:    make(map[*Client]bool),
 	Broadcast:  make(chan []byte),
-	Register:   make(chan *client),
-	unregister: make(chan *client),
+	Register:   make(chan *Client),
+	unregister: make(chan *Client),
 }
 
-func (c *client) Read() {
+func (c *Client) Read() {
 	defer func() {
 		HubInstance.unregister <- c
 		c.conn.Close()
@@ -47,7 +47,7 @@ func (c *client) Read() {
 		HubInstance.Broadcast <- message
 	}
 }
-func (c *client) Write() {
+func (c *Client) Write() {
 	defer func() {
 		c.conn.Close()
 	}()
@@ -67,19 +67,19 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.Register:
-			h.clients[client] = true
+			h.Clients[client] = true
 		case client := <-h.unregister:
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
+			if _, ok := h.Clients[client]; ok {
+				delete(h.Clients, client)
 				close(client.send)
 			}
 		case message := <-h.Broadcast:
-			for client := range h.clients {
+			for client := range h.Clients {
 				select {
 				case client.send <- message:
 				default:
 					close(client.send)
-					delete(h.clients, client)
+					delete(h.Clients, client)
 				}
 			}
 		}
@@ -92,7 +92,7 @@ func ServeWs(w http.ResponseWriter, r *http.Request) {
 		log.Println("upgrade error:", err)
 		return
 	}
-	client := &client{conn: conn, send: make(chan []byte)}
+	client := &Client{conn: conn, send: make(chan []byte)}
 	HubInstance.Register <- client
 	go client.Read()
 	go client.Write()
