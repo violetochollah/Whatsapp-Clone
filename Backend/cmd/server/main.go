@@ -1,43 +1,25 @@
 package main
 
 import (
-	"fmt"
-
-	"github.com/gin-gonic/gin"
-	socketio "github.com/googollee/go-socket.io"
+    "whatsapp-clone/pkg/handlers"
+    "whatsapp-clone/pkg/websocket"
+    "github.com/gin-gonic/gin"
 )
 
 func main() {
-	router := gin.Default()
+    go websocket.HubInstance.Run()
 
-	server := socketio.NewServer(nil)
+    router := gin.Default()
 
-	server.OnConnect("/", func(s socketio.Conn) error {
-		s.SetContext("")
-		fmt.Println("connected:", s.ID())
-		return nil
-	})
+    router.GET("/ping", func(c *gin.Context) {
+        c.JSON(200, gin.H{
+            "message": "pong",
+        })
+    })
 
-	server.OnEvent("/", "message", func(s socketio.Conn, msg string) {
-		fmt.Println("message:", msg)
-		server.BroadcastToRoom("/", "chat", "message", msg)
-	})
+    router.GET("/ws", handlers.ServeWs)
+    router.POST("/api/messages", handlers.PostMessage)
+    router.POST("/api/upload", handlers.UploadFile)
 
-	server.OnDisconnect("/", func(s socketio.Conn, reason string) {
-		fmt.Println("closed", reason)
-	})
-
-	go server.Serve()
-	defer server.Close()
-
-	router.GET("/socket.io/*any", gin.WrapH(server))
-	router.POST("/socket.io/*any", gin.WrapH(server))
-
-	router.Static("/static", "./static")
-	router.GET("/", func(c *gin.Context) {
-		c.File("./static/index.html")
-	})
-
-	// Listen on all network interfaces
-	router.Run("0.0.0.0:8080")
+    router.Run(":8080")
 }
